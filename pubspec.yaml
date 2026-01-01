@@ -1,0 +1,48 @@
+name: facebook
+description: "A professional-grade Facebook clone built with Flutter and Firebase."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Icons
+  cupertino_icons: ^1.0.8
+  font_awesome_flutter: ^10.8.0
+
+  # Firebase Suite (Stable Interlocking Versions)
+  firebase_core: ^3.10.1
+  firebase_auth: ^5.5.0
+  google_sign_in: ^6.2.2
+
+  # Database & Storage
+  cloud_firestore: ^5.6.2
+  firebase_storage: ^12.4.0
+
+  # Contacts & Permissions
+  fast_contacts: ^5.0.1
+  permission_handler: ^11.4.0
+
+  # Video & Media
+  video_player: ^2.9.2
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
+  flutter_slidable: ^3.0.0
+  url_launcher: ^6.3.0
+  share_plus: ^10.1.0
+
+  # Formatting & UI Helpers
+  intl: ^0.19.0  # Note: 0.20.2 is often incompatible with current Flutter stable; 0.19.0 is the standard.
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
