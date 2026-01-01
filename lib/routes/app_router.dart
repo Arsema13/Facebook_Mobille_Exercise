@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/auth/ui/login_screen.dart';
-import '../features/auth/ui/signup_screen.dart';
+import '../features/auth/ui/join_facebook_screen.dart';
 import '../features/navigation/main_nav_wrapper.dart';
 import '../splash_screen.dart';
 
@@ -30,7 +30,7 @@ class AppRouter {
 
       case signup:
         return MaterialPageRoute(
-          builder: (_) => const SignupScreen(),
+          builder: (_) => const JoinFacebookScreen(),
           settings: settings,
         );
 

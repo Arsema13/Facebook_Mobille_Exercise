@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../data/auth_repository.dart';
 import '../../navigation/main_nav_wrapper.dart';
-
 import 'join_facebook_screen.dart';
+import 'forgot_password_screen.dart'; // Ensure this file exists
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5), // Facebook's subtle grey background
+      backgroundColor: const Color(0xFFF0F2F5),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 30),
@@ -57,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 4. Log In Button (Solid Blue)
+              // 4. Log In Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -77,9 +78,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 16),
 
-              // 5. Forgot Password
+              // 5. INTEGRATED Forgot Password Link
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                  );
+                },
                 child: const Text(
                   "Forgot Password?",
                   style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w500),
@@ -102,12 +108,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 24),
 
-              // 7. GOOGLE LOGIN BUTTON (Branded)
+              // 7. GOOGLE LOGIN BUTTON
               _buildGoogleButton(),
 
               const SizedBox(height: 50),
 
-              // 8. Create New Account (Bottom Bordered Button)
+              // 8. Create New Account
               SizedBox(
                 width: double.infinity,
                 height: 44,
@@ -131,7 +137,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Custom Input Builder to match FB's 2025 Input Style
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
@@ -167,7 +172,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Google Branded Sign-In Button
   Widget _buildGoogleButton() {
     return InkWell(
       onTap: () async {
@@ -183,12 +187,11 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF747775)), // Google's standard border color
+          border: Border.all(color: const Color(0xFF747775)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Using a generic G icon here. You should replace this with a proper Google Logo asset.
             const Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
             const SizedBox(width: 10),
             const Text(
