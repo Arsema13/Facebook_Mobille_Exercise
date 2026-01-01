@@ -1,0 +1,2 @@
+C:/Users/lilyt/facebook/android/app/.cxx/Debug/5h5o6h5z/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/lilyt/facebook/android/app/.cxx/Debug/5h5o6h5z/armeabi-v7a/CMakeFiles/rebuild_cache.dir
