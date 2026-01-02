@@ -5,11 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus/share_plus.dart'; // Added for Share
 
-// Your existing imports
 import '../../feed/widgets/post_card.dart';
-import '../../../services/firebase/firestore_service.dart';
 import '../../feed/data/post_model.dart';
 import '../../feed/ui/create_post_screen.dart';
 
@@ -24,9 +22,20 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSearching = false;
   String _searchQuery = "";
 
-  @override
-  void initState() {
-    super.initState();
+  String _getSafeFullName(Map<String, dynamic>? data) {
+    if (data == null) return "User";
+    final fName = data['firstName']?.toString() ?? "";
+    final lName = data['lastName']?.toString() ?? "";
+    final name = "$fName $lName".trim();
+    return name.isEmpty ? "User" : name;
+  }
+
+  // 1. MESSENGER PLAY STORE ICON LINK
+  Future<void> _launchMessenger() async {
+    final Uri url = Uri.parse("https://play.google.com/store/apps/details?id=com.facebook.orca");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _handleCreateStory(BuildContext context, Map<String, dynamic>? userData) async {
@@ -42,18 +51,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       File file = File(image.path);
-      String fileName = 'stories/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      String fileName = 'story/${DateTime.now().millisecondsSinceEpoch}.jpg';
       TaskSnapshot upload = await FirebaseStorage.instance.ref().child(fileName).putFile(file);
       String downloadUrl = await upload.ref.getDownloadURL();
       final user = FirebaseAuth.instance.currentUser;
-      String fullName = userData != null ? "${userData['firstName']} ${userData['lastName']}" : "User";
 
-      await FirebaseFirestore.instance.collection('stories').add({
+      String fullName = _getSafeFullName(userData);
+
+      await FirebaseFirestore.instance.collection('story').add({
         'userId': user?.uid ?? 'anonymous',
         'imageUrl': downloadUrl,
-        'createdAt': FieldValue.serverTimestamp(),
         'userName': fullName,
-        'userProfile': user?.photoURL ?? '',
+        'userProfile': userData?['profilePic']?.toString() ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
       });
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -61,19 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _launchMessenger() async {
-    final Uri url = Uri.parse("https://play.google.com/store/apps/details?id=com.facebook.orca");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(user?.uid).get(),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
       builder: (context, snapshot) {
         Map<String, dynamic>? userData;
         if (snapshot.hasData && snapshot.data!.exists) {
@@ -84,32 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: const Color(0xFFF0F2F5),
           body: CustomScrollView(
             slivers: [
-              SliverAppBar(
-                floating: true,
-                pinned: true,
-                backgroundColor: Colors.white,
-                elevation: 0.5,
-                title: _isSearching
-                    ? TextField(
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: "Search posts...", border: InputBorder.none),
-                  onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
-                )
-                    : const Text('facebook', style: TextStyle(color: Color(0xFF1877F2), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -1.2)),
-                actions: [
-                  _circleIcon(_isSearching ? Icons.close : Icons.search, () {
-                    setState(() {
-                      _isSearching = !_isSearching;
-                      if (!_isSearching) _searchQuery = "";
-                    });
-                  }),
-                  _circleIcon(Icons.messenger, _launchMessenger),
-                  _circleIcon(Icons.logout, () async {
-                    await FirebaseAuth.instance.signOut();
-                    if (mounted) Navigator.of(context).pushReplacementNamed('/login');
-                  }),
-                ],
-              ),
+              _buildAppBar(),
               SliverToBoxAdapter(child: WhatsOnYourMind(userData: userData)),
               const SliverToBoxAdapter(child: Divider(height: 8, thickness: 8, color: Color(0xFFCED0D4))),
               SliverToBoxAdapter(
@@ -119,14 +97,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: Divider(height: 8, thickness: 8, color: Color(0xFFCED0D4))),
-              SliverPadding(
-                padding: const EdgeInsets.only(top: 0),
-                sliver: PostFeedList(searchQuery: _searchQuery, userData: userData),
-              ),
+              PostFeedList(searchQuery: _searchQuery, userData: userData),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      floating: true, pinned: true,
+      backgroundColor: Colors.white,
+      elevation: 0.5,
+      title: _isSearching
+          ? TextField(
+        autofocus: true,
+        decoration: const InputDecoration(hintText: "Search posts...", border: InputBorder.none),
+        onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+      )
+          : const Text('facebook', style: TextStyle(color: Color(0xFF1877F2), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -1.2)),
+      actions: [
+        _circleIcon(_isSearching ? Icons.close : Icons.search, () {
+          setState(() {
+            _isSearching = !_isSearching;
+            if (!_isSearching) _searchQuery = "";
+          });
+        }),
+        _circleIcon(Icons.messenger, _launchMessenger), // Added Messenger Action
+        _circleIcon(Icons.logout, () async {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) Navigator.of(context).pushReplacementNamed('/login');
+        }),
+      ],
     );
   }
 
@@ -142,34 +145,30 @@ class _HomeScreenState extends State<HomeScreen> {
 class StoriesSection extends StatelessWidget {
   final Map<String, dynamic>? userData;
   final VoidCallback onCreateStory;
-
   const StoriesSection({super.key, this.userData, required this.onCreateStory});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 210,
-      color: Colors.white,
+      height: 210, color: Colors.white,
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('stories').orderBy('createdAt', descending: true).limit(10).snapshots(),
+        stream: FirebaseFirestore.instance.collection('story').snapshots(),
         builder: (context, snapshot) {
+          final docs = snapshot.hasData ? snapshot.data!.docs : [];
           return ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             children: [
               GestureDetector(onTap: onCreateStory, child: _buildCreateStoryCard()),
-              if (snapshot.hasData)
-                ...snapshot.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return _buildStoryCard(data['imageUrl'], data['userName'] ?? "User", data['userProfile'] ?? "");
-                }),
-              // RESTORED 5 MOCK STORIES
-              _buildStoryCard("https://picsum.photos/400/700?random=1", "Abebe Degu", "https://i.pravatar.cc/150?u=1"),
-              _buildStoryCard("https://picsum.photos/400/700?random=2", "Alex Dagne", "https://i.pravatar.cc/150?u=2"),
-              _buildStoryCard("https://picsum.photos/400/700?random=3", "Marta Kebede", "https://i.pravatar.cc/150?u=3"),
-              _buildStoryCard("https://picsum.photos/400/700?random=4", "Samuel Girma", "https://i.pravatar.cc/150?u=4"),
-              _buildStoryCard("https://picsum.photos/400/700?random=5", "Bethlehem T.", "https://i.pravatar.cc/150?u=5"),
+              ...docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return _buildStoryCard(
+                  data['imageUrl']?.toString() ?? "",
+                  data['userName']?.toString() ?? "User",
+                  data['userProfile']?.toString() ?? "",
+                );
+              }),
             ],
           );
         },
@@ -178,9 +177,9 @@ class StoriesSection extends StatelessWidget {
   }
 
   Widget _buildCreateStoryCard() {
+    final profilePic = userData?['profilePic']?.toString();
     return Container(
-      width: 110,
-      margin: const EdgeInsets.only(right: 8),
+      width: 110, margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade300)),
       child: Column(
         children: [
@@ -189,10 +188,12 @@ class StoriesSection extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                image: userData?['profilePic'] != null ? DecorationImage(image: NetworkImage(userData!['profilePic']), fit: BoxFit.cover) : null,
+                image: (profilePic != null && profilePic.isNotEmpty)
+                    ? DecorationImage(image: NetworkImage(profilePic), fit: BoxFit.cover)
+                    : null,
                 color: Colors.grey.shade200,
               ),
-              child: userData?['profilePic'] == null ? const Icon(Icons.person, size: 40, color: Colors.white) : null,
+              child: (profilePic == null || profilePic.isEmpty) ? const Icon(Icons.person, size: 40, color: Colors.white) : null,
             ),
           ),
           const Expanded(child: Center(child: Text("Create Story", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
@@ -203,20 +204,23 @@ class StoriesSection extends StatelessWidget {
 
   Widget _buildStoryCard(String bgImage, String name, String profileImage) {
     return Container(
-      width: 110,
-      margin: const EdgeInsets.only(right: 8),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(15), image: DecorationImage(image: NetworkImage(bgImage), fit: BoxFit.cover)),
+      width: 110, margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        image: bgImage.isNotEmpty ? DecorationImage(image: NetworkImage(bgImage), fit: BoxFit.cover) : null,
+        color: Colors.grey.shade300,
+      ),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.2), Colors.transparent, Colors.black.withOpacity(0.6)]),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black26, Colors.transparent, Colors.black54]),
         ),
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            CircleAvatar(radius: 16, backgroundImage: NetworkImage(profileImage.isNotEmpty ? profileImage : "https://i.pravatar.cc/150")),
+            CircleAvatar(radius: 16, backgroundImage: profileImage.isNotEmpty ? NetworkImage(profileImage) : null, child: profileImage.isEmpty ? const Icon(Icons.person, size: 16) : null),
             Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
@@ -230,74 +234,116 @@ class PostFeedList extends StatelessWidget {
   final Map<String, dynamic>? userData;
   const PostFeedList({super.key, required this.searchQuery, this.userData});
 
+  // 2. LIKE LOGIC FOR ALL POSTS
+  Future<void> _handleLike(String postId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final postRef = FirebaseFirestore.instance.collection('posts').doc(postId);
+    final doc = await postRef.get();
+    if (doc.exists) {
+      List<dynamic> likes = doc.data()?['likes'] ?? [];
+      if (likes.contains(user.uid)) {
+        await postRef.update({'likes': FieldValue.arrayRemove([user.uid])});
+      } else {
+        await postRef.update({'likes': FieldValue.arrayUnion([user.uid])});
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // RESTORED 10 MOCK POSTS
-    final List<Map<String, dynamic>> staticMockPosts = [
-      {'id': 'm1', 'userName': 'Abebe Degu', 'userProfile': 'https://i.pravatar.cc/150?u=1', 'description': 'Sunset vibes! 🌅 #nature', 'imageUrl': 'https://picsum.photos/id/10/800/600', 'likes': [], 'commentsCount': 5},
-      {'id': 'm2', 'userName': 'Sarah Smith', 'userProfile': 'https://i.pravatar.cc/150?u=2', 'description': 'Flutter is awesome! 🚀', 'imageUrl': 'https://picsum.photos/id/1/800/600', 'likes': [], 'commentsCount': 12},
-      {'id': 'm3', 'userName': 'Michael welde', 'userProfile': 'https://i.pravatar.cc/150?u=3', 'description': 'Best brunch ever 🥞☕', 'imageUrl': 'https://picsum.photos/id/42/800/600', 'likes': [], 'commentsCount': 2},
-      {'id': 'm4', 'userName': 'Tasew bonja', 'userProfile': 'https://i.pravatar.cc/150?u=4', 'description': 'Missing the mountains 🏔️', 'imageUrl': 'https://picsum.photos/id/29/800/600', 'likes': [], 'commentsCount': 8},
-      {'id': 'm5', 'userName': 'Tigist kasa', 'userProfile': 'https://i.pravatar.cc/150?u=5', 'description': 'New AI model released!', 'imageUrl': 'https://picsum.photos/id/180/800/600', 'likes': [], 'commentsCount': 15},
-      {'id': 'm6', 'userName': 'Marta Kebede', 'userProfile': 'https://i.pravatar.cc/150?u=6', 'description': 'Monday motivation! ☕', 'imageUrl': 'https://picsum.photos/id/63/800/600', 'likes': [], 'commentsCount': 3},
-      {'id': 'm7', 'userName': 'Samuel Girma', 'userProfile': 'https://i.pravatar.cc/150?u=7', 'description': 'Rich culture 🏛️🇪🇹', 'imageUrl': 'https://picsum.photos/id/101/800/600', 'likes': [], 'commentsCount': 7},
-      {'id': 'm8', 'userName': 'Fitness Junkie', 'userProfile': 'https://i.pravatar.cc/150?u=8', 'description': '10km run done! 🏃‍♂️', 'imageUrl': 'https://picsum.photos/id/108/800/600', 'likes': [], 'commentsCount': 9},
-      {'id': 'm9', 'userName': 'Art Lover', 'userProfile': 'https://i.pravatar.cc/150?u=9', 'description': 'Breathtaking abstract art 🎨', 'imageUrl': 'https://picsum.photos/id/152/800/600', 'likes': [], 'commentsCount': 11},
-      {'id': 'm10', 'userName': 'Chef Alex', 'userProfile': 'https://i.pravatar.cc/150?u=10', 'description': 'Pasta from scratch! 🍝', 'imageUrl': 'https://picsum.photos/id/163/800/600', 'likes': [], 'commentsCount': 20},
-    ];
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('posts').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
-        List<PostModel> allPosts = [];
+        if (snapshot.connectionState == ConnectionState.waiting) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
 
-        // Add Mock Posts first
-        allPosts.addAll(staticMockPosts.map((data) => PostModel.fromMap(data, data['id'])));
-
-        // Add Firestore Posts
-        if (snapshot.hasData) {
-          allPosts.addAll(snapshot.data!.docs.map((doc) => PostModel.fromMap(doc.data() as Map<String, dynamic>, doc.id)));
-        }
-
-        final filteredPosts = allPosts.where((post) {
-          final desc = (post.description ?? "").toLowerCase();
-          final name = (post.userName ?? "").toLowerCase();
+        final docs = snapshot.data?.docs ?? [];
+        final filteredDocs = docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final desc = (data['description']?.toString() ?? data['content']?.toString() ?? "").toLowerCase();
+          final name = (data['userName']?.toString() ?? data['username']?.toString() ?? "").toLowerCase();
           return desc.contains(searchQuery) || name.contains(searchQuery);
         }).toList();
 
         return SliverList(
           delegate: SliverChildBuilderDelegate(
                 (context, index) {
-              final post = filteredPosts[index];
-              final currentName = userData != null ? "${userData!['firstName']} ${userData!['lastName']}" : "User";
+              final doc = filteredDocs[index];
+              final data = doc.data() as Map<String, dynamic>;
+              final post = PostModel.fromMap(data, doc.id);
+
+              String currentName = "User";
+              String currentProfile = "";
+              if (userData != null) {
+                currentName = "${userData!['firstName'] ?? ''} ${userData!['lastName'] ?? ''}".trim();
+                currentProfile = userData!['profilePic']?.toString() ?? "";
+              }
 
               return PostCard(
                 post: post,
-                onCommentTap: () => _showComments(context, post.id, currentName),
-                onShareTap: () => Share.share("Check out ${post.userName}'s post: ${post.description}"),
+                onLikeTap: () => _handleLike(post.id),
+                onCommentTap: () => _showComments(context, post.id, currentName, currentProfile),
+                onShareTap: () => Share.share("Check out this post: ${post.description}"), // Enabled Share
               );
             },
-            childCount: filteredPosts.length,
+            childCount: filteredDocs.length,
           ),
         );
       },
     );
   }
 
-  void _showComments(BuildContext context, String postId, String name) {
+  void _showComments(BuildContext context, String postId, String name, String profile) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CommentsSheet(postId: postId, currentUserName: name),
+      builder: (context) => CommentsSheet(postId: postId, currentUserName: name, currentUserProfile: profile),
     );
   }
 }
 
+class WhatsOnYourMind extends StatelessWidget {
+  final Map<String, dynamic>? userData;
+  const WhatsOnYourMind({super.key, this.userData});
+
+  @override
+  Widget build(BuildContext context) {
+    String firstName = userData?['firstName']?.toString() ?? "";
+    String? profilePic = userData?['profilePic']?.toString();
+
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostScreen())),
+      child: Container(
+        color: Colors.white, padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: (profilePic != null && profilePic.isNotEmpty) ? NetworkImage(profilePic) : null,
+              child: (profilePic == null || profilePic.isEmpty) ? const Icon(Icons.person) : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE4E6EB)), borderRadius: BorderRadius.circular(25)),
+                child: Text(firstName.isEmpty ? "What's on your mind?" : "What's on your mind, $firstName?"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 3. UPDATED STANDARD COMMENTS SHEET
 class CommentsSheet extends StatefulWidget {
   final String postId;
   final String currentUserName;
-  const CommentsSheet({super.key, required this.postId, required this.currentUserName});
+  final String currentUserProfile;
+  const CommentsSheet({super.key, required this.postId, required this.currentUserName, required this.currentUserProfile});
 
   @override
   State<CommentsSheet> createState() => _CommentsSheetState();
@@ -311,16 +357,16 @@ class _CommentsSheetState extends State<CommentsSheet> {
     String text = _commentController.text.trim();
     _commentController.clear();
 
-    // Note: Mock posts (m1-m10) won't save comments to Firebase unless they exist in the DB
     await FirebaseFirestore.instance.collection('posts').doc(widget.postId).collection('comments').add({
       'userName': widget.currentUserName,
+      'userProfile': widget.currentUserProfile,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
     await FirebaseFirestore.instance.collection('posts').doc(widget.postId).update({
-      'commentsCount': FieldValue.increment(1),
-    }).catchError((e) => debugPrint("Mock post comment count not updated in DB"));
+      'commentCount': FieldValue.increment(1),
+    });
   }
 
   @override
@@ -333,8 +379,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
         children: [
           const SizedBox(height: 12),
           Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-          const Padding(padding: EdgeInsets.all(16), child: Text("Comments", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-          const Divider(height: 1),
+          const Padding(padding: EdgeInsets.all(16), child: Text("Comments", style: TextStyle(fontWeight: FontWeight.bold))),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('posts').doc(widget.postId).collection('comments').orderBy('createdAt', descending: true).snapshots(),
@@ -344,9 +389,13 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   children: snapshot.data!.docs.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
                     return ListTile(
-                      leading: const CircleAvatar(radius: 18, child: Icon(Icons.person, size: 20)),
-                      title: Text(data['userName'] ?? "User", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      subtitle: Text(data['text'] ?? ""),
+                      leading: CircleAvatar(
+                        radius: 18,
+                        backgroundImage: data['userProfile'] != null && data['userProfile'].isNotEmpty ? NetworkImage(data['userProfile']) : null,
+                        child: data['userProfile'] == null || data['userProfile'].isEmpty ? const Icon(Icons.person) : null,
+                      ),
+                      title: Text(data['userName']?.toString() ?? "User", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      subtitle: Text(data['text']?.toString() ?? ""),
                     );
                   }).toList(),
                 );
@@ -354,58 +403,25 @@ class _CommentsSheetState extends State<CommentsSheet> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      hintText: "Write a comment...",
-                      filled: true,
-                      fillColor: const Color(0xFFF0F2F5),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                  ),
+                    child: TextField(
+                        controller: _commentController,
+                        decoration: InputDecoration(
+                          hintText: "Write a comment...",
+                          filled: true,
+                          fillColor: const Color(0xFFF0F2F5),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                        )
+                    )
                 ),
                 IconButton(onPressed: _submitComment, icon: const Icon(Icons.send, color: Color(0xFF1877F2))),
               ],
             ),
-          ),
+          )
         ],
-      ),
-    );
-  }
-}
-
-class WhatsOnYourMind extends StatelessWidget {
-  final Map<String, dynamic>? userData;
-  const WhatsOnYourMind({super.key, this.userData});
-
-  @override
-  Widget build(BuildContext context) {
-    String firstName = userData != null ? userData!['firstName'] : "";
-    return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostScreen())),
-      child: Container(
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            const CircleAvatar(radius: 20, backgroundColor: Color(0xFF8D949E), child: Icon(Icons.person, color: Colors.white)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE4E6EB)), borderRadius: BorderRadius.circular(25)),
-                child: Text(firstName.isEmpty ? "What's on your mind?" : "What's on your mind, $firstName?", style: const TextStyle(fontSize: 15, color: Colors.black87)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Icon(Icons.photo_library, color: Color(0xFF45BD62)),
-          ],
-        ),
       ),
     );
   }
