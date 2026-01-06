@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:facebook/features/feed/ui/feed_screen.dart';
+
+// Note: Replace with your actual feed or home screen import
+// import 'package:facebook/features/feed/ui/feed_screen.dart';
 
 // --- 1. DATA CONTROLLER ---
 class RegistrationController {
@@ -13,18 +17,30 @@ class RegistrationController {
   static String mobileNumber = "";
   static String emailAddress = "";
   static String password = "";
+
+  // Google Sign-In Helper
+  static Future<UserCredential?> signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return null; // User cancelled
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      return await FirebaseAuth.instance.signInWithCredential(credential);
+    } catch (e) {
+      print("Google Sign-In Error: $e");
+      return null;
+    }
+  }
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp(); // Ensure you initialize Firebase in your actual project
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: JoinFacebookScreen(),
-  ));
-}
 
-// --- CONSTANTS FOR BEAUTIFUL UI ---
+
+// --- CONSTANTS ---
 const Color kFBBlue = Color(0xFF1877F2);
 const Color kFBGray = Color(0xFFF0F2F5);
 const Color kFBTextGrey = Color(0xFF65676B);
@@ -59,6 +75,21 @@ class JoinFacebookScreen extends StatelessWidget {
               FBPrimaryButton(
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NameInputScreen())),
                 text: 'Get Started',
+              ),
+              const SizedBox(height: 12),
+              // --- ADDED GOOGLE BUTTON ---
+              FBSecondaryButton(
+                onPressed: () async {
+                  UserCredential? user = await RegistrationController.signInWithGoogle();
+                  if (user != null) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => const HomeScreen()),
+                          (route) => false,
+                    );
+                  }
+                },
+                text: 'Continue with Google',
+                icon: Icons.login, // You can replace with a Google icon asset
               ),
               const Spacer(flex: 3),
               TextButton(
@@ -354,13 +385,11 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
   Future<void> _register() async {
     setState(() => _loading = true);
     try {
-      // 1. REGISTER IN FIREBASE AUTH
       UserCredential userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: RegistrationController.emailAddress,
         password: RegistrationController.password,
       );
 
-      // 2. SAVE DATA TO FIRESTORE
       await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set({
         'firstName': RegistrationController.firstName,
         'lastName': RegistrationController.lastName,
@@ -371,7 +400,6 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 3. NAVIGATE TO HOME AND REMOVE ALL PREVIOUS SCREENS
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -381,10 +409,6 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? "Authentication failed"), backgroundColor: Colors.red),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -414,6 +438,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
     );
   }
 }
+
 
 
 
@@ -492,6 +517,30 @@ class FBPrimaryButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+class FBSecondaryButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final IconData icon;
+  const FBSecondaryButton({super.key, required this.text, required this.onPressed, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: Colors.black54),
+        label: Text(text, style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.grey.shade300),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       ),
     );
   }
